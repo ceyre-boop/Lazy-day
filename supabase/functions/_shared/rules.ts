@@ -11,7 +11,7 @@ function drop(c: Candidate, reason: DropReason, detail: string): Dropped {
  * Order matters: the first failing rule is the reported reason.
  */
 export function checkAccuracy(c: Candidate, win: Window, region?: Region): Dropped | null {
-  if (c.skip) return drop(c, c.skip, `source flagged event as ${c.skip}`)
+  if (c.skip) return drop(c, c.skip, c.skipDetail ?? `source flagged event as ${c.skip}`)
 
   if (!c.sourceUrl) return drop(c, 'no_source_url', 'listing has no source_url')
 

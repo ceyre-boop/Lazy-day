@@ -5,10 +5,16 @@ import { adapters as defaultAdapters } from './adapters/index.ts'
 import type { SourceAdapter } from './adapters/types.ts'
 import { createPoliteGet } from './robots.ts'
 import { haversineMiles } from './normalize.ts'
+import { createAiSearchAdapter, AI_SEARCH, type AiSearchReport, type MessageRunner } from './ai-search/adapter.ts'
 
 export const WINDOW_DAYS = 14
 
 export interface RunDeps {
+  /** Runs the Anthropic Messages API for the ai-search source. Omit to skip ai-search. */
+  aiRunner?: MessageRunner
+  aiGeocode?: (address: string) => Promise<{ lat: number; lng: number } | null>
+  /** Ticketmaster is off unless both enabled and keyed. */
+  enableTicketmaster?: boolean
   ticketmasterKey?: string
   adapters?: SourceAdapter[]
   fetchFn?: typeof fetch
@@ -23,6 +29,7 @@ export interface RegionResult {
   /** Sources that completed without error (safe to prune unseen rows for). */
   okSources: string[]
   sourceErrors: string[]
+  aiSearch: AiSearchReport | null
 }
 
 export async function runRegion(region: Region, deps: RunDeps = {}): Promise<RegionResult> {
@@ -33,7 +40,7 @@ export async function runRegion(region: Region, deps: RunDeps = {}): Promise<Reg
   const okSources: string[] = []
   const sourceErrors: string[] = []
 
-  if (deps.ticketmasterKey) {
+  if (deps.enableTicketmaster && deps.ticketmasterKey) {
     try {
       const { events, errors } = await fetchTicketmaster({
         apiKey: deps.ticketmasterKey,
@@ -49,12 +56,13 @@ export async function runRegion(region: Region, deps: RunDeps = {}): Promise<Reg
     } catch (e) {
       sourceErrors.push(`ticketmaster: ${(e as Error).message}`)
     }
-  } else {
-    sourceErrors.push('ticketmaster: skipped, TICKETMASTER_API_KEY not set')
   }
 
+  const ai = deps.aiRunner ? createAiSearchAdapter({ run: deps.aiRunner, geocode: deps.aiGeocode }) : null
+  if (!ai) sourceErrors.push('ai-search: skipped, ANTHROPIC_API_KEY not set')
+
   const get = createPoliteGet(deps.fetchFn)
-  for (const a of deps.adapters ?? defaultAdapters) {
+  for (const a of [...(ai ? [ai] : []), ...(deps.adapters ?? defaultAdapters)]) {
     if (haversineMiles(region.lat, region.lng, a.coverage.lat, a.coverage.lng) > region.radiusMiles + a.coverage.radiusMiles) {
       continue // adapter's area doesn't overlap this region
     }
@@ -71,7 +79,7 @@ export async function runRegion(region: Region, deps: RunDeps = {}): Promise<Reg
   const { rows, dropped } = runRules(candidates, { now, end }, {
     region,
     fetchedAt: now,
-    sourcePriority: [TICKETMASTER, ...(deps.adapters ?? defaultAdapters).map((a) => a.name)],
+    sourcePriority: [TICKETMASTER, ...(deps.adapters ?? defaultAdapters).map((a) => a.name), AI_SEARCH],
   })
-  return { rows, dropped, fetchedCount: candidates.length, fetchedBySource, okSources, sourceErrors }
+  return { rows, dropped, fetchedCount: candidates.length, fetchedBySource, okSources, sourceErrors, aiSearch: ai?.lastReport ?? null }
 }

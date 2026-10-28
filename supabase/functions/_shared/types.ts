@@ -9,6 +9,11 @@ export type DropReason =
   | 'no_source_url'
   | 'outside_radius'
   | 'duplicate'
+  | 'not_fetched'
+  | 'date_not_on_page'
+  | 'recurring_no_date'
+  | 'invalid_ai_output'
+  | 'no_location'
 
 /** What a source (Ticketmaster or an adapter) hands to the pipeline, before the accuracy rules run. */
 export interface Candidate {
@@ -36,6 +41,8 @@ export interface Candidate {
   dateClaims: string[]
   /** Set by a source to force a drop with a specific reason. */
   skip?: DropReason
+  /** Human-readable detail for `skip`, used in the drop log. */
+  skipDetail?: string
 }
 
 export interface EventRow {
@@ -70,6 +77,10 @@ export interface Region {
   lat: number
   lng: number
   radiusMiles: number
+  /** Human name for prompts, e.g. "Detroit, MI". */
+  label?: string
+  /** IANA zone the region's events happen in. Defaults to America/New_York. */
+  timezone?: string
 }
 
 export interface Window {

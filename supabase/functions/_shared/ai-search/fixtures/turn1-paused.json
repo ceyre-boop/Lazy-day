@@ -1,0 +1,38 @@
+{
+  "id": "msg_fixture_1",
+  "role": "assistant",
+  "model": "claude-sonnet-5-5",
+  "stop_reason": "pause_turn",
+  "content": [
+    { "type": "text", "text": "I'll search for events near Detroit." },
+    { "type": "server_tool_use", "id": "srvtoolu_s1", "name": "web_search", "input": { "query": "Detroit events Halloween 2026 library parks" } },
+    {
+      "type": "web_search_tool_result",
+      "tool_use_id": "srvtoolu_s1",
+      "content": [
+        { "type": "web_search_result", "url": "https://example.org/events/haunted-hayride", "title": "Haunted Hayride", "encrypted_content": "Eqg...", "page_age": "October 2026" },
+        { "type": "web_search_result", "url": "https://example.org/events/snippet-only", "title": "Snippet Only Event", "encrypted_content": "Eqh...", "page_age": "October 2026" }
+      ]
+    },
+    { "type": "server_tool_use", "id": "srvtoolu_f1", "name": "web_fetch", "input": { "url": "https://example.org/events/haunted-hayride" } },
+    {
+      "type": "web_fetch_tool_result",
+      "tool_use_id": "srvtoolu_f1",
+      "content": {
+        "type": "web_fetch_result",
+        "url": "https://example.org/events/haunted-hayride",
+        "content": {
+          "type": "document",
+          "title": "Haunted Hayride",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "Haunted Hayride at Maybury Park\nJoin us Saturday, October 31, 2026 at 7:00 PM for a spooky ride through the woods. Admission is $12 per person. 21 and over after 9 PM. 20145 Beck Rd, Northville."
+          }
+        },
+        "retrieved_at": "2026-10-28T12:00:00Z"
+      }
+    }
+  ],
+  "usage": { "input_tokens": 12000, "output_tokens": 800, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "server_tool_use": { "web_search_requests": 1, "web_fetch_requests": 1 } }
+}
