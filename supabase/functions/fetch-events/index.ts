@@ -21,7 +21,8 @@ Deno.serve(async (req) => {
   const env = (k: string) => Deno.env.get(k)
   // Only the scheduler (service role key) may trigger a run. The anon key ships in the public web bundle,
   // so without this anyone could spend the Anthropic budget by posting {"force":true}.
-  if (req.headers.get('Authorization') !== `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`) {
+  const auth = req.headers.get('Authorization')
+  if (auth !== `Bearer ${env('FETCH_SECRET')}` && auth !== `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`) {
     return new Response('unauthorized', { status: 401 })
   }
   const supabase = createClient(env('SUPABASE_URL')!, env('SUPABASE_SERVICE_ROLE_KEY')!)
