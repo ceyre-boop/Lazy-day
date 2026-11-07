@@ -7,7 +7,15 @@ const TAG_LABEL: Record<string, string> = {
   kids: 'Kids', music: 'Music', sports: 'Sports', shows: 'Shows', seasonal: 'Haunted/Seasonal', '21+': '21+',
 }
 
-export function EventCard({ event }: { event: AppEvent }) {
+interface Props {
+  event: AppEvent
+  saved?: boolean
+  onLike?: () => void
+  onDismiss?: () => void
+  onOpen?: () => void
+}
+
+export function EventCard({ event, saved, onLike, onDismiss, onOpen }: Props) {
   const c = usePalette()
   const where = [event.venue, event.city].filter(Boolean).join(' · ')
   const note = noteLabel(event)
@@ -31,8 +39,21 @@ export function EventCard({ event }: { event: AppEvent }) {
             </View>
           ))}
         </View>
+        {onLike && (
+          <Pressable onPress={onLike} accessibilityRole="button" accessibilityLabel={saved ? 'Unsave' : 'Save'} hitSlop={8} style={styles.icon}>
+            <Text style={{ fontSize: 22, color: saved ? c.accent : c.muted }}>{saved ? '♥' : '♡'}</Text>
+          </Pressable>
+        )}
+        {onDismiss && (
+          <Pressable onPress={onDismiss} accessibilityRole="button" accessibilityLabel="Not for me" hitSlop={8} style={styles.icon}>
+            <Text style={{ fontSize: 18, color: c.muted }}>✕</Text>
+          </Pressable>
+        )}
         <Pressable
-          onPress={() => Linking.openURL(event.source_url)}
+          onPress={() => {
+            onOpen?.()
+            Linking.openURL(event.source_url)
+          }}
           accessibilityRole="link"
           style={[styles.button, { backgroundColor: c.accent }]}
         >
@@ -52,6 +73,7 @@ const styles = StyleSheet.create({
   tags: { flexDirection: 'row', flexWrap: 'wrap', flex: 1, gap: 6, marginRight: 8 },
   tag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   tagText: { fontFamily: fonts.bodyBold, fontSize: 12 },
+  icon: { paddingHorizontal: 8 },
   button: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
   buttonText: { fontFamily: fonts.bodyBold, fontSize: 14 },
 })

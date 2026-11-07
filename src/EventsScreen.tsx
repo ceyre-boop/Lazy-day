@@ -6,6 +6,7 @@ import { EventCard } from './components/EventCard'
 import { dayChips, filterEvents, groupByDay, updatedLabel } from './lib/events'
 import type { Place } from './lib/location'
 import { supabase, supabaseConfigured, triggerRefresh } from './lib/supabase'
+import { dismiss, emptyTaste, like, loadTaste, opened, pickedForYou, saveTaste, unlike, type Taste } from './lib/taste'
 import { DEFAULT_RADIUS, RADIUS_OPTIONS, TYPE_CHIPS, type AppEvent, type EventType } from './lib/types'
 import { fonts, usePalette } from './theme'
 
@@ -25,6 +26,17 @@ export function EventsScreen({ place, radius, onRadius, onChangePlace }: Props) 
   const [day, setDay] = useState<string | null>(null)
   const [types, setTypes] = useState<Set<EventType>>(new Set())
   const now = useMemo(() => new Date(), [events])
+  const [taste, setTaste] = useState<Taste>(emptyTaste())
+  const [savedOnly, setSavedOnly] = useState(false)
+  useEffect(() => {
+    loadTaste().then(setTaste)
+  }, [])
+  const learn = (fn: (t: Taste) => Taste) =>
+    setTaste((prev) => {
+      const next = fn(prev)
+      saveTaste(next)
+      return next
+    })
 
   const load = useCallback(async () => {
     if (!supabaseConfigured) {
@@ -67,7 +79,13 @@ export function EventsScreen({ place, radius, onRadius, onChangePlace }: Props) 
       return next
     })
 
-  const sections = useMemo(() => groupByDay(filterEvents(events, day, types), now), [events, day, types, now])
+  const visible = useMemo(() => events.filter((e) => !taste.dismissed.includes(e.id)), [events, taste.dismissed])
+  const forYou = useMemo(() => (savedOnly ? [] : pickedForYou(taste, filterEvents(visible, day, types))), [taste, visible, day, types, savedOnly])
+  const sections = useMemo(() => {
+    const base = savedOnly ? Object.values(taste.liked).filter((e) => new Date(e.starts_at) >= now) : filterEvents(visible, day, types)
+    const days = groupByDay(base, now)
+    return forYou.length ? [{ key: 'foryou', title: 'Picked for you', data: forYou }, ...days] : days
+  }, [visible, day, types, now, forYou, savedOnly, taste.liked])
   const chips = useMemo(() => dayChips(now), [now])
 
   return (
@@ -99,6 +117,7 @@ export function EventsScreen({ place, radius, onRadius, onChangePlace }: Props) 
           ))}
         </ScrollView>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+          <Chip label={`♥ Saved${Object.keys(taste.liked).length ? ` (${Object.keys(taste.liked).length})` : ''}`} selected={savedOnly} onPress={() => setSavedOnly((v) => !v)} />
           {TYPE_CHIPS.map((t) => (
             <Chip key={t.key} label={t.label} selected={types.has(t.key)} onPress={() => toggle(t.key)} />
           ))}
@@ -112,15 +131,23 @@ export function EventsScreen({ place, radius, onRadius, onChangePlace }: Props) 
       ) : (
         <SectionList
           sections={sections}
-          keyExtractor={(e) => e.id}
-          renderItem={({ item }) => <EventCard event={item} />}
+          keyExtractor={(e, i) => e.id + i}
+          renderItem={({ item }) => (
+            <EventCard
+              event={item}
+              saved={Boolean(taste.liked[item.id])}
+              onLike={() => learn((t) => (t.liked[item.id] ? unlike(t, item) : like(t, item)))}
+              onDismiss={() => learn((t) => dismiss(t, item))}
+              onOpen={() => learn((t) => opened(t, item))}
+            />
+          )}
           renderSectionHeader={({ section }) => (
             <Text style={[styles.dayHeader, { color: c.text, backgroundColor: c.bg }]}>{section.title}</Text>
           )}
           stickySectionHeadersEnabled
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} />}
-          ListEmptyComponent={<Text style={[styles.empty, { color: c.muted }]}>Nothing matches those filters. Try turning one off.</Text>}
+          ListEmptyComponent={<Text style={[styles.empty, { color: c.muted }]}>{savedOnly ? 'Nothing saved yet. Tap the heart on events you like and the app will learn what to show you.' : 'Nothing matches those filters. Try turning one off.'}</Text>}
           ListFooterComponent={events.length ? <Text style={[styles.footer, { color: c.muted }]}>{updatedLabel(events)}</Text> : undefined}
         />
       )}
