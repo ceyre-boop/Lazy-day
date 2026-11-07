@@ -149,5 +149,43 @@ export async function fetchTicketmaster(opts: TmOptions): Promise<{ events: TM[]
       if (page + 1 >= (json.page?.totalPages ?? 0)) break
     }
   }
-  return { events, errors }
+  // Ticketmaster is concert-heavy, so run a few extra whole-window queries to surface family and seasonal events.
+  for (const extra of EXTRA_QUERIES) {
+    for (let page = 0; page < 3; page++) {
+      const url = new URL('https://app.ticketmaster.com/discovery/v2/events.json')
+      url.search = new URLSearchParams({
+        apikey: opts.apiKey,
+        latlong: `${opts.region.lat},${opts.region.lng}`,
+        radius: String(opts.region.radiusMiles),
+        unit: 'miles',
+        startDateTime: iso(opts.from),
+        endDateTime: iso(opts.to),
+        size: '200',
+        page: String(page),
+        sort: 'date,asc',
+        includeTest: 'no',
+        ...extra,
+      }).toString()
+      await new Promise((r) => setTimeout(r, sleep))
+      const res = await f(url)
+      if (!res.ok) {
+        errors.push(`ticketmaster ${JSON.stringify(extra)} page ${page}: HTTP ${res.status}`)
+        break
+      }
+      const json = await res.json()
+      events.push(...(json._embedded?.events ?? []))
+      if (page + 1 >= (json.page?.totalPages ?? 0)) break
+    }
+  }
+  const seen = new Set<string>()
+  return { events: events.filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true))), errors }
 }
+
+const EXTRA_QUERIES: Record<string, string>[] = [
+  { classificationName: 'family' },
+  { keyword: 'holiday' },
+  { keyword: 'christmas' },
+  { keyword: 'festival' },
+  { keyword: 'haunted' },
+  { keyword: 'kids' },
+]

@@ -5,7 +5,7 @@ import { Chip } from './components/Chip'
 import { EventCard } from './components/EventCard'
 import { dayChips, filterEvents, groupByDay, updatedLabel } from './lib/events'
 import type { Place } from './lib/location'
-import { supabase, supabaseConfigured } from './lib/supabase'
+import { supabase, supabaseConfigured, triggerRefresh } from './lib/supabase'
 import { DEFAULT_RADIUS, RADIUS_OPTIONS, TYPE_CHIPS, type AppEvent, type EventType } from './lib/types'
 import { fonts, usePalette } from './theme'
 
@@ -42,6 +42,15 @@ export function EventsScreen({ place, radius, onRadius, onChangePlace }: Props) 
   useEffect(() => {
     setLoading(true)
     load().finally(() => setLoading(false))
+  }, [load])
+
+  // On every visit, ask the backend to refresh if stale. If it started one, reload the list when it should be done.
+  useEffect(() => {
+    let timers: ReturnType<typeof setTimeout>[] = []
+    triggerRefresh().then((status) => {
+      if (status === 'started') timers = [setTimeout(() => load(), 45_000), setTimeout(() => load(), 120_000)]
+    })
+    return () => timers.forEach(clearTimeout)
   }, [load])
 
   const onRefresh = async () => {

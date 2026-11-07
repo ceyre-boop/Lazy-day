@@ -7,7 +7,7 @@ import { createPoliteGet } from './robots.ts'
 import { haversineMiles } from './normalize.ts'
 import { createAiSearchAdapter, AI_SEARCH, type AiSearchReport, type MessageRunner } from './ai-search/adapter.ts'
 
-export const WINDOW_DAYS = 14
+export const WINDOW_DAYS = 30
 
 export interface RunDeps {
   /** Runs the Anthropic Messages API for the ai-search source. Omit to skip ai-search. */
