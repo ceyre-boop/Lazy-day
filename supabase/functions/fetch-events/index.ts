@@ -10,15 +10,20 @@ const DEFAULT_REGIONS: Region[] = [
   { lat: 42.3314, lng: -83.0458, radiusMiles: 50, label: 'Detroit, MI', timezone: 'America/Detroit' },
 ]
 
-// A run is reused if the same grid cell + radius ran less than this long ago. A bit under the 6 h cron
-// period so scheduler jitter never causes a skipped refresh.
-const CACHE_TTL_MS = 5.5 * 3_600_000
+// One run per region per day is plenty for a small audience. A run is reused if the same grid cell + radius
+// ran less than this long ago (a bit under the 24 h cron period so jitter never skips a refresh).
+const CACHE_TTL_MS = 22 * 3_600_000
 
 /** Cache key: location rounded to a 0.1° grid (about 7 miles) plus radius. */
 export const cacheKey = (r: Region) => `ai:${r.lat.toFixed(1)}:${r.lng.toFixed(1)}:${r.radiusMiles}`
 
 Deno.serve(async (req) => {
   const env = (k: string) => Deno.env.get(k)
+  // Only the scheduler (service role key) may trigger a run. The anon key ships in the public web bundle,
+  // so without this anyone could spend the Anthropic budget by posting {"force":true}.
+  if (req.headers.get('Authorization') !== `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`) {
+    return new Response('unauthorized', { status: 401 })
+  }
   const supabase = createClient(env('SUPABASE_URL')!, env('SUPABASE_SERVICE_ROLE_KEY')!)
   const body = await req.json().catch(() => ({}))
   const regions: Region[] = body.regions ?? JSON.parse(env('FETCH_REGIONS') ?? 'null') ?? DEFAULT_REGIONS
@@ -41,6 +46,8 @@ Deno.serve(async (req) => {
       enableTicketmaster: env('ENABLE_TICKETMASTER') === 'true',
       ticketmasterKey: env('TICKETMASTER_API_KEY'),
       now: runStarted,
+      aiMaxSearches: Number(env('AI_MAX_SEARCHES') ?? 12),
+      aiMaxFetches: Number(env('AI_MAX_FETCHES') ?? 24),
     })
 
     let upserted = 0

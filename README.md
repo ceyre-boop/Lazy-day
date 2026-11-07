@@ -16,7 +16,7 @@ Accuracy is the point: events without a confirmed date, with conflicting dates, 
    supabase secrets set ANTHROPIC_API_KEY=<key>
    supabase functions deploy fetch-events
    ```
-4. Schedule it: edit `supabase/schedule.sql` (project ref + service role key) and run it in the SQL editor. It calls the function every 6 hours. Run it once by hand first:
+4. Schedule it: edit `supabase/schedule.sql` (project ref + service role key) and run it in the SQL editor. It calls the function once a day. Run it once by hand first:
    `curl -X POST https://<ref>.supabase.co/functions/v1/fetch-events -H "Authorization: Bearer <service role key>" -d '{"force":true}'`
 5. `bunx expo start`, then open in Expo Go (iOS or Android).
 
@@ -49,7 +49,7 @@ Runs are keyed by a rounded location grid (0.1°, about 7 miles) plus radius: `a
 
 ### Cost
 
-Each run costs model tokens (`claude-sonnet-5-5`: $2 / $10 per million in / out, cache reads $0.20) plus $10 per 1,000 web searches; web fetch has no extra charge. `scripts/run-fetcher.ts` prints the measured cost from `usage`. At one region every 6 hours that is 4 runs a day per region.
+Each run costs model tokens (`claude-sonnet-5-5`: $2 / $10 per million in / out, cache reads $0.20) plus $10 per 1,000 web searches; web fetch has no extra charge. `scripts/run-fetcher.ts` prints the measured cost from `usage`. At one region once a day that is 4 runs a day per region.
 
 ## Accuracy rules (`supabase/functions/_shared/rules.ts`)
 

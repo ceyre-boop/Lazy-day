@@ -13,6 +13,8 @@ export interface RunDeps {
   /** Runs the Anthropic Messages API for the ai-search source. Omit to skip ai-search. */
   aiRunner?: MessageRunner
   aiGeocode?: (address: string) => Promise<{ lat: number; lng: number } | null>
+  aiMaxSearches?: number
+  aiMaxFetches?: number
   /** Ticketmaster is off unless both enabled and keyed. */
   enableTicketmaster?: boolean
   ticketmasterKey?: string
@@ -58,7 +60,7 @@ export async function runRegion(region: Region, deps: RunDeps = {}): Promise<Reg
     }
   }
 
-  const ai = deps.aiRunner ? createAiSearchAdapter({ run: deps.aiRunner, geocode: deps.aiGeocode }) : null
+  const ai = deps.aiRunner ? createAiSearchAdapter({ run: deps.aiRunner, geocode: deps.aiGeocode, maxSearches: deps.aiMaxSearches, maxFetches: deps.aiMaxFetches }) : null
   if (!ai) sourceErrors.push('ai-search: skipped, ANTHROPIC_API_KEY not set')
 
   const get = createPoliteGet(deps.fetchFn)
