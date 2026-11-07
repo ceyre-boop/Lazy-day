@@ -189,3 +189,11 @@ describe('pipeline wiring', () => {
     expect(costUsd(u)).toBeCloseTo(2 + 1 + 0.1, 6)
   })
 })
+
+describe('evidence matching tolerates markdown but still requires the date', () => {
+  test('loose() folds markdown, nbsp and curly quotes', async () => {
+    const { loose } = await import('./verify.ts')
+    expect(loose('**Fri, Nov 14** · 7:00 PM')).toBe(loose('Fri, Nov 14 · 7:00 PM'))
+    expect(loose('[Fri](x) Nov 14')).toContain('nov14')
+  })
+})

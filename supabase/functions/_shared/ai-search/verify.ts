@@ -10,6 +10,13 @@ const MONTH_FULL = ['january', 'february', 'march', 'april', 'may', 'june', 'jul
 
 const squash = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
 
+/**
+ * Letters and digits only, Unicode-folded. Fetched pages come back as markdown ("**Nov** 14", "[Fri](...)",
+ * non-breaking spaces, curly quotes), so a faithful copy of the visible text rarely matches byte for byte.
+ * The date itself is still checked separately in both the quote and the page.
+ */
+export const loose = (s: string) => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+
 /** Does `text` state the date `iso` (YYYY-MM-DD) in a common written form? Year is optional. */
 export function dateAppearsIn(text: string, iso: string): boolean {
   const [y, m, d] = iso.split('-').map(Number)
@@ -125,7 +132,9 @@ async function verifyOne(e: AiEvent, raw: unknown, o: VerifyOptions): Promise<Ca
   if (page.text === null) return fail('date_not_on_page', 'page text unavailable (PDF/binary), date cannot be verified')
 
   const evidence = squash(e.date_evidence)
-  if (!squash(page.text).includes(evidence)) return fail('date_not_on_page', 'date_evidence is not text from the fetched page')
+  if (!squash(page.text).includes(evidence) && !(loose(evidence).length >= 8 && loose(page.text).includes(loose(evidence)))) {
+    return fail('date_not_on_page', `date_evidence is not text from the fetched page: "${e.date_evidence.slice(0, 120)}"`)
+  }
   if (!dateAppearsIn(e.date_evidence, e.start_date)) return fail('date_not_on_page', `date_evidence does not state ${e.start_date}`)
   if (!dateAppearsIn(page.text, e.start_date)) return fail('date_not_on_page', `${e.start_date} does not appear on the page`)
 
