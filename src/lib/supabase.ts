@@ -10,13 +10,13 @@ export const supabase = createClient(extra.supabaseUrl ?? 'http://localhost', ex
 })
 
 /** Ask the backend to refresh events if they are stale (it refreshes at most once a day, however many people call). */
-export async function triggerRefresh(): Promise<'fresh' | 'started' | 'error'> {
+export async function triggerRefresh(hints?: { likes: string[]; avoids: string[] }): Promise<'fresh' | 'started' | 'error'> {
   if (!supabaseConfigured) return 'error'
   try {
     const res = await fetch(`${extra.supabaseUrl}/functions/v1/fetch-events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: extra.supabaseAnonKey! },
-      body: '{}',
+      body: JSON.stringify({ hints: hints ?? { likes: [], avoids: [] } }),
     })
     const j = await res.json()
     return j.status === 'started' ? 'started' : j.status === 'fresh' ? 'fresh' : 'error'

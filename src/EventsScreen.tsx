@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, RefreshControl, ScrollView, SectionList, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Chip } from './components/Chip'
@@ -6,7 +6,7 @@ import { EventCard } from './components/EventCard'
 import { dayChips, filterEvents, groupByDay, updatedLabel } from './lib/events'
 import type { Place } from './lib/location'
 import { supabase, supabaseConfigured, triggerRefresh } from './lib/supabase'
-import { dismiss, emptyTaste, like, loadTaste, opened, pickedForYou, saveTaste, unlike, type Taste } from './lib/taste'
+import { dismiss, emptyTaste, like, loadTaste, opened, pickedForYou, saveTaste, searchHints, unlike, type Taste } from './lib/taste'
 import { DEFAULT_RADIUS, RADIUS_OPTIONS, TYPE_CHIPS, type AppEvent, type EventType } from './lib/types'
 import { fonts, usePalette } from './theme'
 
@@ -28,8 +28,12 @@ export function EventsScreen({ place, radius, onRadius, onChangePlace }: Props) 
   const now = useMemo(() => new Date(), [events])
   const [taste, setTaste] = useState<Taste>(emptyTaste())
   const [savedOnly, setSavedOnly] = useState(false)
+  const [tasteReady, setTasteReady] = useState(false)
   useEffect(() => {
-    loadTaste().then(setTaste)
+    loadTaste().then((t) => {
+      setTaste(t)
+      setTasteReady(true)
+    })
   }, [])
   const learn = (fn: (t: Taste) => Taste) =>
     setTaste((prev) => {
@@ -56,14 +60,18 @@ export function EventsScreen({ place, radius, onRadius, onChangePlace }: Props) 
     load().finally(() => setLoading(false))
   }, [load])
 
-  // On every visit, ask the backend to refresh if stale. If it started one, reload the list when it should be done.
+  // On every visit, ask the backend to refresh if stale, telling it what you like so the search can aim at it.
+  // Sent once taste has loaded; the backend runs at most one search a day however often this fires.
+  const hintsRef = useRef(searchHints(taste))
+  hintsRef.current = searchHints(taste)
   useEffect(() => {
+    if (!tasteReady) return
     let timers: ReturnType<typeof setTimeout>[] = []
-    triggerRefresh().then((status) => {
+    triggerRefresh(hintsRef.current).then((status) => {
       if (status === 'started') timers = [setTimeout(() => load(), 45_000), setTimeout(() => load(), 120_000)]
     })
     return () => timers.forEach(clearTimeout)
-  }, [load])
+  }, [load, tasteReady])
 
   const onRefresh = async () => {
     setRefreshing(true)

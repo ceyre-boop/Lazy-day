@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { runRegion, WINDOW_DAYS } from '../_shared/run.ts'
 import { createAnthropicRunner } from '../_shared/ai-search/client.ts'
 import { AI_SEARCH } from '../_shared/ai-search/adapter.ts'
+import { sanitizeHints, type Hints } from '../_shared/ai-search/hints.ts'
 import type { Region } from '../_shared/types.ts'
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined
@@ -38,7 +39,9 @@ Deno.serve(async (req) => {
   // visitors can never run up the Anthropic bill.
   const auth = req.headers.get('Authorization')
   const isAdmin = auth === `Bearer ${env('FETCH_SECRET')}` || auth === `Bearer ${env('SUPABASE_SERVICE_ROLE_KEY')}`
-  const body = isAdmin ? await req.json().catch(() => ({})) : {}
+  const rawBody = await req.json().catch(() => ({}))
+  const body = isAdmin ? rawBody : {}
+  const hints = sanitizeHints(rawBody?.hints)
   const force = body.force === true
   const regions: Region[] = body.regions ?? JSON.parse(env('FETCH_REGIONS') ?? 'null') ?? DEFAULT_REGIONS
 
@@ -74,7 +77,7 @@ Deno.serve(async (req) => {
     for (const region of claimed) {
       const key = cacheKey(region)
       try {
-        report.push(await refreshRegion(supabase, region, key, env))
+        report.push(await refreshRegion(supabase, region, key, env, hints))
       } catch (e) {
         // Release the claim so the next visit retries.
         await supabase.from('ai_search_runs').update({ last_run_at: new Date(0).toISOString() }).eq('cache_key', key)
@@ -95,16 +98,22 @@ Deno.serve(async (req) => {
   return reply({ status: 'started' })
 })
 
-async function refreshRegion(supabase: Db, region: Region, key: string, env: Env) {
-  const anthropicKey = env('ANTHROPIC_API_KEY')
+async function refreshRegion(supabase: Db, region: Region, key: string, env: Env, hints: Hints) {
+  // Hard monthly ceiling on Anthropic spend: past it, only the free sources keep refreshing.
+  const budget = Number(env('AI_MONTHLY_BUDGET_USD') ?? 10)
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString()
+  const { data: spent } = await supabase.from('ai_spend_log').select('cost_usd').gte('ran_at', since)
+  const spentUsd = (spent ?? []).reduce((n: number, r: { cost_usd: number | string }) => n + Number(r.cost_usd), 0)
+  const anthropicKey = spentUsd >= budget ? undefined : env('ANTHROPIC_API_KEY')
   const runStarted = new Date()
   const r = await runRegion(region, {
     aiRunner: anthropicKey ? createAnthropicRunner(anthropicKey) : undefined,
     enableTicketmaster: env('ENABLE_TICKETMASTER') === 'true',
     ticketmasterKey: env('TICKETMASTER_API_KEY'),
     now: runStarted,
-    aiMaxSearches: Number(env('AI_MAX_SEARCHES') ?? 12),
-    aiMaxFetches: Number(env('AI_MAX_FETCHES') ?? 24),
+    aiHints: hints,
+    aiMaxSearches: Number(env('AI_MAX_SEARCHES') ?? 8),
+    aiMaxFetches: Number(env('AI_MAX_FETCHES') ?? 16),
   })
 
   let upserted = 0
@@ -143,6 +152,8 @@ async function refreshRegion(supabase: Db, region: Region, key: string, env: Env
     usage: r.aiSearch?.usage ?? {},
     dropped_log: dropLog,
   })
+
+  if (r.aiSearch) await supabase.from('ai_spend_log').insert({ cost_usd: r.aiSearch.costUsd, region_key: key })
 
   return {
     region,

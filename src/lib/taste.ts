@@ -63,6 +63,21 @@ export function pickedForYou(t: Taste, events: AppEvent[], limit = 5): AppEvent[
     .map((x) => x.e)
 }
 
+export interface SearchHints {
+  likes: string[]
+  avoids: string[]
+}
+
+const termOf = (f: string) => f.slice(f.indexOf(':') + 1)
+
+/** What to tell the server-side search: the strongest things you like and avoid. Empty until you've taught it something. */
+export function searchHints(t: Taste, maxLikes = 8, maxAvoids = 5): SearchHints {
+  const ranked = Object.entries(t.weights).filter(([, w]) => w !== 0)
+  const likes = ranked.filter(([, w]) => w >= 1).sort((a, b) => b[1] - a[1]).slice(0, maxLikes).map(([f]) => termOf(f))
+  const avoids = ranked.filter(([, w]) => w <= -0.5).sort((a, b) => a[1] - b[1]).slice(0, maxAvoids).map(([f]) => termOf(f))
+  return { likes, avoids }
+}
+
 const KEY = 'lazyday.taste.v1'
 export async function loadTaste(): Promise<Taste> {
   try {

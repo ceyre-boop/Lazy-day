@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { dismiss, emptyTaste, like, pickedForYou, score, unlike } from './taste'
+import { dismiss, emptyTaste, like, pickedForYou, score, searchHints, unlike } from './taste'
 import type { AppEvent } from './types'
 
 const ev = (o: Partial<AppEvent>): AppEvent => ({
@@ -30,5 +30,17 @@ describe('taste', () => {
   test('dismissing teaches what to avoid', () => {
     const t = dismiss(emptyTaste(), ev({ id: 'k1', title: 'Toddler Story Time', categories: ['kids'] }))
     expect(score(t, ev({ id: 'k2', title: 'Kids Craft', categories: ['kids'] }))).toBeLessThan(0)
+  })
+})
+
+describe('searchHints', () => {
+  test('empty taste gives no hints', () => expect(searchHints(emptyTaste())).toEqual({ likes: [], avoids: [] }))
+  test('liked things become likes, hidden things become avoids', () => {
+    const kids = ev({ id: 'k1', title: 'Toddler Story Time', categories: ['kids'] })
+    const h = searchHints(dismiss(like(emptyTaste(), game), kids))
+    expect(h.likes).toContain('football')
+    expect(h.likes).toContain('michigan stadium')
+    expect(h.avoids).toContain('kids')
+    expect(h.avoids).toContain('toddler')
   })
 })
